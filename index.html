@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>استقبال الحفل</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 500px;
+      margin: 25px auto;
+      padding: 16px;
+      text-align: center;
+      background: #faf8f5;
+    }
+    input, button {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 14px;
+      margin: 10px 0;
+      font-size: 17px;
+      border-radius: 8px;
+    }
+    input { border: 1px solid #ccc; }
+    button {
+      border: 0;
+      background: #755548;
+      color: white;
+    }
+    #reader { margin: 20px auto; }
+    #result { overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <h2>استقبال الحفل</h2>
+  <p>أدخلي الرقم السري للمشرفة، ثم ابدئي المسح.</p>
+
+  <input id="pin" type="password"
+         placeholder="الرقم السري للمشرفة">
+
+  <button id="start" onclick="startScanner()">
+    تشغيل الكاميرا
+  </button>
+
+  <div id="reader"></div>
+  <p id="result"></p>
+
+  <form id="checkForm"
+        method="POST"
+        target="_blank"
+        action="https://script.google.com/macros/s/AKfycbzLEfoJy0Avz2weSDN_gMrThn4fA-_Kx3D9BWOZHV03aRi37NNbLmAib46uulqWBNXuCw/exec">
+    <input type="hidden" name="action" value="checkin">
+    <input type="hidden" name="token" id="token">
+    <input type="hidden" name="pin" id="formPin">
+    <button id="confirm" type="submit" hidden>
+      تأكيد تسجيل الدخول
+    </button>
+  </form>
+
+  <script>
+    let scanner;
+
+    async function startScanner() {
+      const pin = document.getElementById('pin').value.trim();
+
+      if (!pin) {
+        alert('أدخلي الرقم السري أولاً');
+        return;
+      }
+
+      document.getElementById('result').textContent =
+        'وجّهي الكاميرا نحو الباركود';
+
+      document.getElementById('confirm').hidden = true;
+
+      try {
+        scanner = new Html5Qrcode('reader');
+
+        await scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 230, height: 230 } },
+          async function(decodedText) {
+            await scanner.stop();
+
+            document.getElementById('token').value = decodedText;
+            document.getElementById('formPin').value =
+              document.getElementById('pin').value.trim();
+
+            document.getElementById('result').textContent =
+              'تمت قراءة الباركود. اضغطي تأكيد لتسجيل الدخول.';
+
+            document.getElementById('confirm').hidden = false;
+          }
+        );
+      } catch (error) {
+        document.getElementById('result').textContent =
+          'تعذر تشغيل الكاميرا: ' + error;
+      }
+    }
+  </script>
+</body>
+</html>
