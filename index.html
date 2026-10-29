@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>استقبال الحفل</title>
+
   <script src="https://unpkg.com/html5-qrcode"></script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -14,6 +16,7 @@
       text-align: center;
       background: #faf8f5;
     }
+
     input, button {
       width: 100%;
       box-sizing: border-box;
@@ -22,37 +25,67 @@
       font-size: 17px;
       border-radius: 8px;
     }
-    input { border: 1px solid #ccc; }
+
+    input {
+      border: 1px solid #ccc;
+    }
+
     button {
       border: 0;
       background: #755548;
       color: white;
+      cursor: pointer;
     }
-    #reader { margin: 20px auto; }
-    #result { overflow-wrap: anywhere; }
+
+    button:disabled {
+      opacity: 0.6;
+    }
+
+    #reader {
+      width: 100%;
+      max-width: 400px;
+      margin: 20px auto;
+    }
+
+    #result {
+      overflow-wrap: anywhere;
+      line-height: 1.8;
+    }
+
+    #confirm {
+      background: #26734d;
+    }
   </style>
 </head>
+
 <body>
   <h2>استقبال الحفل</h2>
   <p>أدخلي الرقم السري للمشرفة، ثم ابدئي المسح.</p>
 
-  <input id="pin" type="password"
-         placeholder="الرقم السري للمشرفة">
+  <input
+    id="pin"
+    type="password"
+    placeholder="الرقم السري للمشرفة"
+    autocomplete="off"
+  >
 
-  <button id="start" onclick="startScanner()">
+  <button id="start" type="button" onclick="startScanner()">
     تشغيل الكاميرا
   </button>
 
   <div id="reader"></div>
-  <p id="result"></p>
+  <p id="result" aria-live="polite"></p>
 
-  <form id="checkForm"
-        method="POST"
-        target="_blank"
-        action="https://script.google.com/macros/s/AKfycbzLEfoJy0Avz2weSDN_gMrThn4fA-_Kx3D9BWOZHV03aRi37NNbLmAib46uulqWBNXuCw/exec">
+  <form
+    id="checkForm"
+    method="POST"
+    target="_blank"
+    action="https://script.google.com/macros/s/AKfycbzLEfoJy0Avz2weSDN_gMrThn4fA-_Kx3D9BWOZHV03aRi37NNbLmAib46uulqWBNXuCw/exec"
+  >
     <input type="hidden" name="action" value="checkin">
     <input type="hidden" name="token" id="token">
     <input type="hidden" name="pin" id="formPin">
+
     <button id="confirm" type="submit" hidden>
       تأكيد تسجيل الدخول
     </button>
@@ -60,42 +93,91 @@
 
   <script>
     let scanner;
+    let isScanning = false;
+    let hasScanned = false;
 
     async function startScanner() {
       const pin = document.getElementById('pin').value.trim();
+      const result = document.getElementById('result');
+      const startButton = document.getElementById('start');
+      const confirmButton = document.getElementById('confirm');
 
       if (!pin) {
         alert('أدخلي الرقم السري أولاً');
         return;
       }
 
-      document.getElementById('result').textContent =
-        'وجّهي الكاميرا نحو الباركود';
+      if (typeof Html5Qrcode === 'undefined') {
+        result.textContent =
+          'تعذر تحميل أداة قراءة الباركود. تأكدي من اتصال الإنترنت ثم أعيدي فتح الصفحة.';
+        return;
+      }
 
-      document.getElementById('confirm').hidden = true;
+      if (isScanning) {
+        return;
+      }
+
+      result.textContent = 'جاري تشغيل الكاميرا...';
+      confirmButton.hidden = true;
+      startButton.disabled = true;
+      hasScanned = false;
 
       try {
+        if (scanner) {
+          try {
+            await scanner.clear();
+          } catch (e) {
+            // لا توجد جلسة سابقة تحتاج إلى تنظيف
+          }
+        }
+
         scanner = new Html5Qrcode('reader');
 
         await scanner.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 230, height: 230 } },
+          {
+            fps: 15,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0
+          },
           async function(decodedText) {
-            await scanner.stop();
+            if (hasScanned) return;
+            hasScanned = true;
+
+            try {
+              await scanner.stop();
+            } catch (e) {
+              // نكمل عرض الرمز المقروء
+            }
+
+            isScanning = false;
+            startButton.disabled = false;
 
             document.getElementById('token').value = decodedText;
             document.getElementById('formPin').value =
               document.getElementById('pin').value.trim();
 
-            document.getElementById('result').textContent =
-              'تمت قراءة الباركود. اضغطي تأكيد لتسجيل الدخول.';
+            result.textContent =
+              'تمت قراءة الرمز بنجاح. اضغطي «تأكيد تسجيل الدخول».';
 
-            document.getElementById('confirm').hidden = false;
+            confirmButton.hidden = false;
+          },
+          function() {
+            // تجاهل محاولات القراءة غير الناجحة أثناء البحث
           }
         );
+
+        isScanning = true;
+        result.textContent =
+          'الكاميرا تعمل. وجّهي المربع نحو رمز QR وقرّبي الجوال إذا لزم الأمر.';
+
       } catch (error) {
-        document.getElementById('result').textContent =
-          'تعذر تشغيل الكاميرا: ' + error;
+        isScanning = false;
+        startButton.disabled = false;
+
+        result.textContent =
+          'تعذر تشغيل الكاميرا: ' +
+          (error.message || String(error));
       }
     }
   </script>
